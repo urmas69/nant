@@ -138,6 +138,21 @@ namespace NAnt.Core.Tasks {
         #region Public Instance Properties
 
         /// <summary>
+        /// The name of the property to save the content to.
+        /// </summary>
+        [TaskAttribute("property", Required = false)]
+        public string Property
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        [TaskAttribute("throwexceptiononexitcode", Required = false)]
+        public bool ThrowExceptionOnExitCode { get; set; } = true;
+
+        /// <summary>
         /// The name of the executable that should be used to launch the 
         /// external program.
         /// </summary>
@@ -449,7 +464,7 @@ namespace NAnt.Core.Tasks {
 
                 _exitCode = process.ExitCode;
 
-                if (process.ExitCode != 0) {
+                if (ThrowExceptionOnExitCode && process.ExitCode != 0) {
                     throw new BuildException(
                         String.Format(CultureInfo.InvariantCulture, 
                         ResourceUtils.GetString("NA1119"), 
@@ -457,6 +472,7 @@ namespace NAnt.Core.Tasks {
                         process.ExitCode), 
                         Location);
                 }
+
             } catch (BuildException e) {
                 if (FailOnError) {
                     throw;
@@ -586,9 +602,11 @@ namespace NAnt.Core.Tasks {
         /// <summary>
         /// Reads from the stream until the external program is ended.
         /// </summary>
-        private void StreamReaderThread_Output() {
+        private void StreamReaderThread_Output()
+        {
             StreamReader reader = _stdOut;
             bool doAppend = OutputAppend;
+            StringBuilder sb = new StringBuilder();
 
             while (true) {
                 string logContents = reader.ReadLine();
@@ -603,10 +621,15 @@ namespace NAnt.Core.Tasks {
                         writer.WriteLine(logContents);
                         doAppend = true;
                         writer.Close();
+                    } else if (Property != null) {
+                        sb.AppendLine(logContents);
                     } else {
                         OutputWriter.WriteLine(logContents);
                     }
                 }
+            }
+            if (Property != null) {
+                Properties[Property] = sb.ToString();
             }
 
             lock (_lockObject) {
@@ -617,9 +640,11 @@ namespace NAnt.Core.Tasks {
         /// <summary>
         /// Reads from the stream until the external program is ended.
         /// </summary>
-        private void StreamReaderThread_Error() {
+        private void StreamReaderThread_Error()
+        {
             StreamReader reader = _stdError;
             bool doAppend = OutputAppend;
+            StringBuilder sb = new StringBuilder();
 
             while (true) {
                 string logContents = reader.ReadLine();
@@ -635,8 +660,14 @@ namespace NAnt.Core.Tasks {
                         writer.WriteLine(logContents);
                         doAppend = true;
                         writer.Close();
+                    } else if (Property != null) {
+                        sb.AppendLine(logContents);
                     }
                 }
+            }
+
+            if (Property != null) {
+                Properties[Property] = sb.ToString();
             }
 
             lock (_lockObject) {
