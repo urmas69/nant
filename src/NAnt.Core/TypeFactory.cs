@@ -22,6 +22,7 @@ using System;
 using System.Collections;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Security.Permissions;
 using System.Xml;
@@ -113,14 +114,19 @@ namespace NAnt.Core {
         public static bool ScanAssembly(Assembly assembly, Task task) {
             task.Log(Level.Verbose, "Scanning assembly \"{0}\" for extensions.", 
                 assembly.GetName().Name);
-                
-            foreach (Type type in assembly.GetExportedTypes()) {
-                foreach (MethodInfo methodInfo in type.GetMethods()) {
-                    if (methodInfo.IsStatic) {
-                        task.Log(Level.Verbose, "Found method {0}.",
-                            methodInfo.Name);
-                    }
-                }
+
+            var taskClasses = assembly.GetTypes()
+                .Where(t => t.GetCustomAttributes(typeof(TaskNameAttribute), false).Any())
+                .Select(t => new
+                {
+                    Type = t,
+                    TaskName = ((TaskNameAttribute)t.GetCustomAttribute(typeof(TaskNameAttribute)))?.Name
+                });
+            // Output the class name and TaskName attribute value
+            foreach (var taskClass in taskClasses)
+            {
+                //Console.WriteLine($"Class: {taskClass.Type.Name}, TaskName: {taskClass.TaskName}");
+                task.Log(Level.Verbose, $"Found TaskName: {taskClass.TaskName}, Class: {taskClass.Type.Name}.");
             }
 
             bool isExtensionAssembly = false;
