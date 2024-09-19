@@ -26,6 +26,7 @@ using System.Globalization;
 using System.Xml;
 
 using NAnt.Core.Attributes;
+using NAnt.Core.Tasks;
 using NAnt.Core.Util;
 
 namespace NAnt.Core {
@@ -233,41 +234,47 @@ namespace NAnt.Core {
         /// <summary>
         /// Executes dependent targets first, then the target.
         /// </summary>
-        public void Execute() {
-            if (IfDefined && !UnlessDefined) {
-                try {
-                    Project.OnTargetStarted(this, new BuildEventArgs(this));
+        public void Execute()
+        {
+            if (!IfDefined || UnlessDefined) {
+                return;
+            }
+
+            try {
+                Project.OnTargetStarted(this, new BuildEventArgs(this));
                 
-                    // select all the task nodes and execute them
-                    foreach (XmlNode childNode in XmlNode) {
-                        if (!(childNode.NodeType == XmlNodeType.Element)|| !childNode.NamespaceURI.Equals(NamespaceManager.LookupNamespace("nant"))) {
-                            continue;
-                        }
-                        
-                        if (TypeFactory.TaskBuilders.Contains(childNode.Name)) {
-                            Task task = Project.CreateTask(childNode, this);
-                            if (task != null) {
-                                task.Execute();
-                            }
-                        } else if (TypeFactory.DataTypeBuilders.Contains(childNode.Name)) {
-                            DataTypeBase dataType = Project.CreateDataTypeBase(childNode);
-                            Project.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
-                                childNode.Name, dataType.ID);
-                            if (!Project.DataTypeReferences.Contains(dataType.ID)) {
-                                Project.DataTypeReferences.Add(dataType.ID, dataType);
-                            } else {
-                                Project.DataTypeReferences[dataType.ID] = dataType; // overwrite with the new reference.
-                            }
-                        } else {
-                            throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
-                                ResourceUtils.GetString("NA1071"), 
-                                childNode.Name), Project.LocationMap.GetLocation(childNode));
-                        }
+                // select all the task nodes and execute them
+                foreach (XmlNode childNode in XmlNode) {
+                    if (!(childNode.NodeType == XmlNodeType.Element)|| !childNode.NamespaceURI.Equals(NamespaceManager.LookupNamespace("nant"))) {
+                        continue;
                     }
-                } finally {
-                    _executed = true;
-                    Project.OnTargetFinished(this, new BuildEventArgs(this));
+                        
+                    if (TypeFactory.TaskBuilders.Contains(childNode.Name)) {
+                        Task task = Project.CreateTask(childNode, this);
+                        if (task != null) {
+                            task.Execute();
+                        }
+
+                        if (task is ExitTask exitTask && (exitTask.IfDefined && !exitTask.UnlessDefined)) break;
+
+                    } else if (TypeFactory.DataTypeBuilders.Contains(childNode.Name)) {
+                        DataTypeBase dataType = Project.CreateDataTypeBase(childNode);
+                        Project.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
+                            childNode.Name, dataType.ID);
+                        if (!Project.DataTypeReferences.Contains(dataType.ID)) {
+                            Project.DataTypeReferences.Add(dataType.ID, dataType);
+                        } else {
+                            Project.DataTypeReferences[dataType.ID] = dataType; // overwrite with the new reference.
+                        }
+                    } else {
+                        throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
+                            ResourceUtils.GetString("NA1071"), 
+                            childNode.Name), Project.LocationMap.GetLocation(childNode));
+                    }
                 }
+            } finally {
+                _executed = true;
+                Project.OnTargetFinished(this, new BuildEventArgs(this));
             }
         }
 
