@@ -45,7 +45,7 @@ test-results/
 /.svn/
 
 # Visual Studio specific files
-/.vs/
+.vs/
 
 # CVS specific files
 /CVS/*
