@@ -20,11 +20,13 @@
 
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security.Permissions;
+using System.Text;
 using System.Xml;
 
 using NAnt.Core.Attributes;
@@ -115,39 +117,68 @@ namespace NAnt.Core {
             task.Log(Level.Verbose, "Scanning assembly \"{0}\" for extensions.", 
                 assembly.GetName().Name);
 
-            var taskClasses = assembly.GetTypes()
+            void traceLoadException(ReflectionTypeLoadException ex)
+            {
+                var sb = new StringBuilder();
+                var osbit = Environment.Is64BitOperatingSystem ? "x64" : "x86";
+                var procbit = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                sb.AppendLine($"OS: {Environment.OSVersion.VersionString} ({osbit}), Process: {procbit}");
+                foreach (var exSub in ex.LoaderExceptions)
+                {
+                    sb.AppendLine(exSub.Message);
+                    if (exSub is FileNotFoundException exFileNotFound)
+                    {
+                        if (!string.IsNullOrEmpty(exFileNotFound.FusionLog))
+                        {
+                            sb.AppendLine("Fusion Log:");
+                            sb.AppendLine(exFileNotFound.FusionLog);
+                        }
+                    }
+                    sb.AppendLine();
+                }
+                var errorMessage = sb.ToString();
+                //Display or log the error based on your application.
+                task.Log(Level.Error, errorMessage);
+            }
+
+            try
+            {
+                 var taskClasses = assembly.GetTypes()
                 .Where(t => t.GetCustomAttributes(typeof(TaskNameAttribute), false).Any())
                 .Select(t => new
                 {
                     Type = t,
                     TaskName = ((TaskNameAttribute)t.GetCustomAttribute(typeof(TaskNameAttribute)))?.Name
                 });
-            // Output the class name and TaskName attribute value
-            foreach (var taskClass in taskClasses)
-            {
-                //Console.WriteLine($"Class: {taskClass.Type.Name}, TaskName: {taskClass.TaskName}");
-                task.Log(Level.Verbose, $"Found TaskName: {taskClass.TaskName}, Class: {taskClass.Type.Name}.");
+                // Output the class name and TaskName attribute value
+                foreach (var taskClass in taskClasses)
+                {
+                    //Console.WriteLine($"Class: {taskClass.Type.Name}, TaskName: {taskClass.TaskName}");
+                    task.Log(Level.Verbose, $"Found TaskName: {taskClass.TaskName}, Class: {taskClass.Type.Name}.");
+                }
+            }
+            catch (ReflectionTypeLoadException ex) {
+                traceLoadException(ex);
             }
 
-            bool isExtensionAssembly = false;
 
-            ExtensionAssembly extensionAssembly = new ExtensionAssembly (
-                assembly);
 
-            Type[] types;
+            var isExtensionAssembly = false;
+
+            var extensionAssembly = new ExtensionAssembly (assembly);
+
+            Type[] types = null;
 
             try {
                 types = assembly.GetTypes();
             }
-            catch(ReflectionTypeLoadException ex) {
-                if(ex.LoaderExceptions != null && ex.LoaderExceptions.Length > 0) {
-                    throw ex.LoaderExceptions[0];
-                }
-
+            catch (ReflectionTypeLoadException ex)
+            {
+                traceLoadException(ex);
                 throw;
             }
 
-            foreach (Type type in types) {
+            foreach (var type in types) {
                 //
                 // each extension type is exclusive, meaning a given type 
                 // cannot be both a task and data type
@@ -157,7 +188,7 @@ namespace NAnt.Core {
                 // identified as a task
                 //
 
-                bool extensionFound = ScanTypeForTasks(extensionAssembly,
+                var extensionFound = ScanTypeForTasks(extensionAssembly,
                     type, task);
 
                 if (!extensionFound) {
@@ -188,10 +219,10 @@ namespace NAnt.Core {
             // with an extension assembly that was built using an older version
             // of NAnt(.Core)
             if (!isExtensionAssembly) {
-                AssemblyName coreAssemblyName = Assembly.GetExecutingAssembly().
+                var coreAssemblyName = Assembly.GetExecutingAssembly().
                     GetName(false);
 
-                foreach (AssemblyName assemblyName in assembly.GetReferencedAssemblies()) {
+                foreach (var assemblyName in assembly.GetReferencedAssemblies()) {
                     if (assemblyName.Name == coreAssemblyName.Name) {
                         // the given assembly references NAnt.Core, so check whether
                         // it doesn't reference an older version of NAnt.Core

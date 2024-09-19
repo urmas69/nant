@@ -23,5 +23,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTrademarkAttribute("")]
 [assembly: AssemblyCultureAttribute("")]
 [assembly: AssemblyVersionAttribute("0.93.5019.0")]
-[assembly: AssemblyInformationalVersionAttribute("0.93")]
+// [assembly: AssemblyInformationalVersionAttribute("0.93")]
+[assembly: AssemblyInformationalVersion("0.93.5019-testing1")]
 
